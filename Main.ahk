@@ -5,7 +5,8 @@
     Main.ahk
     Responsibility: Wire ListPaster's dependencies, start services, register shortcuts and the tray menu. No logic.
     Dependencies: every module below
-    Shortcuts: Ctrl+Shift+V paste next | Ctrl+Alt+Z undo (left Alt). Everything else is in the tray menu;
+    Shortcuts: Win+Alt+V turn ON/OFF (works while OFF) | Win+V paste next | Ctrl+Alt+Z undo (left Alt).
+               Everything else is in the tray menu;
                "Extra hotkeys" there adds Ctrl+Alt+B/R/L/A/P/W/G.
 */
 
@@ -64,7 +65,8 @@ prefs.OnChange(ObjBindMethod(tray, "OnSettingsChanged"))
 hotkeys.OnPausedChanged(ObjBindMethod(controller, "OnPausedChanged"))
 hotkeys.OnPausedChanged(ObjBindMethod(tray, "OnPausedChanged"))
 
-; --- Shortcuts (core = always on; extra = only while "Extra hotkeys" is ticked in the tray menu) ---
+; --- Shortcuts (always = works even while OFF; core = on while ON; extra = only while "Extra hotkeys" is ticked) ---
+hotkeys.Add(Constants.HK_TOGGLE_ON, "Turn ListPaster on/off", (*) => hotkeys.TogglePaused(), "always")
 hotkeys.Add(Constants.HK_PASTE_NEXT, "Paste next", (hk) => controller.PasteNext(hk), "core")
 hotkeys.Add(Constants.HK_UNDO, "Undo last paste", (hk) => controller.Undo(hk), "core")
 hotkeys.Add(Constants.HK_BACK, "Step back", (*) => controller.Back(), "extra")
@@ -81,6 +83,8 @@ timer.Start()
 store.Resume()
 listWin.Start()
 hotkeys.RegisterAll()
+if (prefs.Get("StartOn") = 0)
+    hotkeys.SetPaused(true)                  ; StartOn=0 in data\settings.ini: start OFF
 tray.Start()
 clip.StartMonitoring(ObjBindMethod(controller, "OnClipboardText"))
 OnExit((*) => (delivery.RestoreNow(), store.Flush(), listWin.SaveGeometry(), 0))    ; must end with 0 or exit is cancelled

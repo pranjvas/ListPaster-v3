@@ -440,17 +440,30 @@ Test_A12_Shortcuts() {
     Assert.Eq(hk.Describe("^+v"), "Ctrl+Shift+V", "Ctrl+Shift+V is described plainly")
     Assert.Eq(hk.Describe("^<!z"), "Ctrl+Alt+Z", "left-Alt shortcuts are described as Ctrl+Alt")
     Assert.Eq(hk.Describe("F13"), "F13", "a plain key keeps its name")
+    Assert.Eq(hk.Describe("#v") "/" hk.Describe("#!v"), "Win+V/Win+Alt+V", "Win shortcuts are described plainly")
+    Assert.Eq(hk.OptionsFor("always", false) "|" hk.OptionsFor("core", false) "|" hk.OptionsFor("extra", false) "|" hk.OptionsFor("extra", true),
+        "On S|On|Off|On", "always = exempt from Suspend; core on; extra follows its setting")
+    threw := ""
+    try {
+        hk.Add("F18", "Bad group", (*) => 0, "sometimes")
+    } catch ValueError as e {
+        threw := "ValueError"
+    }
+    Assert.Eq(threw, "ValueError", "an unknown group is refused")
 
     ; F13/F14 don't exist on normal keyboards, so the test can't steal a real shortcut
     hk.Add("F13", "Test core", (*) => 0, "core")
     hk.Add("NotAKey", "Broken shortcut", (*) => 0, "core")
     hk.Add("F14", "Test extra", (*) => 0, "extra")
     hk.Add("NotAKey2", "Broken extra", (*) => 0, "extra")
+    hk.Add("F17", "Test always", (*) => 0, "always")
+    hk.Add("NotAKey3", "Broken always", (*) => 0, "always")
     hk.RegisterAll()
     Assert.Eq(tips.alerts.Length, 1, "all registration problems are reported in one message")
     msg := tips.alerts.Length ? tips.alerts[1] : ""
     Assert.Contains(msg, "Broken shortcut (NotAKey): unavailable until fixed", "a broken core shortcut is named and marked unavailable")
     Assert.Contains(msg, "Broken extra (NotAKey2): still in the tray menu", "a broken extra shortcut points to the tray")
+    Assert.Contains(msg, "Broken always (NotAKey3): unavailable until fixed", "a broken always shortcut is marked unavailable")
     Assert.Eq(InStr(msg, "Test core"), 0, "shortcuts that work aren't listed")
 
     prefs.OnChange(ObjBindMethod(hk, "OnSettingsChanged"))

@@ -21,9 +21,11 @@ class HotkeyManager {
     }
 
     ; --- Public Methods ---
+    ; group: "core" (on while not paused), "extra" (only while Extra hotkeys is ticked),
+    ;        "always" (keeps working while paused, e.g. the on/off shortcut)
     Add(keys, label, fn, group) {
-        if (group != "core" && group != "extra")
-            throw ValueError("group must be core or extra: " label, A_ThisFunc)
+        if (group != "core" && group != "extra" && group != "always")
+            throw ValueError("group must be core, extra or always: " label, A_ThisFunc)
         if !HasMethod(fn)
             throw Error("Callback is not callable: " label, A_ThisFunc)
         this._entries.Push({keys: keys, label: label, fn: fn, group: group, ok: false})
@@ -36,16 +38,28 @@ class HotkeyManager {
         failed := ""
         for entry in this._entries {
             try {
-                Hotkey("$" entry.keys, entry.fn, (entry.group = "core" || extrasOn) ? "On" : "Off")
+                Hotkey("$" entry.keys, entry.fn, this.OptionsFor(entry.group, extrasOn))
                 entry.ok := true
             } catch Error as e {
                 this._LogError(A_ThisFunc, entry.label " (" entry.keys "): " e.Message)
-                note := (entry.group = "core") ? ": unavailable until fixed, it has no tray item" : ": still in the tray menu"
+                note := (entry.group = "extra") ? ": still in the tray menu" : ": unavailable until fixed, it has no tray item"
                 failed .= "`n- " entry.label " (" this.Describe(entry.keys) ")" note
             }
         }
         if (failed != "")
             this._tips.Alert("These ListPaster shortcuts couldn't be set up:" failed "`n`nCheck the HK_ lines in Constants.ahk. Everything else keeps working.")
+    }
+
+    ; Pure: Hotkey() options for a group. "S" exempts the hotkey from Suspend, so it still fires while paused.
+    OptionsFor(group, extrasOn) {
+        switch group {
+            case "always":
+                return "On S"
+            case "extra":
+                return extrasOn ? "On" : "Off"
+            default:
+                return "On"
+        }
     }
 
     SetExtraEnabled(enabled) {
