@@ -1,6 +1,7 @@
 /*
     TrayMenu.ahk
-    Responsibility: the tray icon's menu and tooltip: status, list actions, settings choices, pause and exit.
+    Responsibility: the tray icon's menu and tooltip: ON/OFF status, list actions, settings choices (copy mode,
+                    auto-advance, insert mode), turn on/off and exit.
     Dependencies: ItemList, Settings, HotkeyManager, TimingEngine, and an action map from Main
                   (show, generate, load, back, restart, clear, exit -> callables)
 */
@@ -14,6 +15,7 @@ class TrayMenu {
     _menu := ""           ; A_TrayMenu
     _advanceMenu := ""    ; Menu: auto-advance choices
     _modeMenu := ""       ; Menu: insert mode choices
+    _copyMenu := ""       ; Menu: copy mode choices (Queue each copy / Load copied lists)
     _refreshFn := ""      ; BoundFunc -> Refresh
     _built := false
     _statusText := ""     ; current text of the status line (items are renamed by their current text)
@@ -56,7 +58,7 @@ class TrayMenu {
         if !this._built
             return
         info := {count: this._items.GetCount(), position: this._items.GetPosition(), next: this._items.Peek()}
-        cfg := {advance: this._prefs.Get("AdvanceMode"), mode: this._prefs.Get("DeliveryMode")}
+        cfg := {advance: this._prefs.Get("AdvanceMode"), mode: this._prefs.Get("DeliveryMode"), copy: this._prefs.Get("CopyMode")}
         cfg.extra := this._prefs.Get("ExtraHotkeys")
         cfg.showNext := this._prefs.Get("ShowNextInTooltip")
         cfg.remember := this._prefs.Get("RememberList")
@@ -68,14 +70,14 @@ class TrayMenu {
     BuildState(info, cfg, paused, escapeAmpersands) {
         count := info.count
         pos := info.position
+        queue := (cfg.copy = "Queue")
         if (count = 0)
-            status := "No list loaded"
+            status := queue ? "Nothing queued" : "No list loaded"
         else if (pos >= count)
-            status := "List complete (" count " of " count ")"
+            status := queue ? "All " count " pasted" : "List complete (" count " of " count ")"
         else
             status := "Next: " (pos + 1) " of " count " · " cfg.advance " · " cfg.mode
-        if paused
-            status := "Paused — " status
+        status := (paused ? "OFF — " : "ON · ") status
         tip := Constants.APP_NAME " — " status
         if (cfg.showNext = 1 && count > 0 && pos < count)
             tip .= "`nNext item: " StrReplace(info.next, "`t", " ")    ; Windows cuts a tooltip at its first tab
@@ -86,10 +88,10 @@ class TrayMenu {
             trailing := StrLen(tip) - StrLen(RTrim(tip, "&"))
             tip := SubStr(tip, 1, StrLen(tip) - Mod(trailing, 3))       ; don't leave half an escape at the cut
         }
-        state := {status: status, tip: tip, advance: cfg.advance, mode: cfg.mode}
+        state := {status: status, tip: tip, advance: cfg.advance, mode: cfg.mode, copy: cfg.copy}
         state.enabled := Map("back", pos > 0, "restart", pos > 0, "clear", count > 0)
         state.checks := Map("ExtraHotkeys", cfg.extra = 1, "ShowNextInTooltip", cfg.showNext = 1, "RememberList", cfg.remember = 1)
-        state.pauseText := paused ? "Resume ListPaster" : "Pause ListPaster"
+        state.pauseText := this._OnOffText(paused)
         return state
     }
 
@@ -104,6 +106,9 @@ class TrayMenu {
             this._modeMenu := Menu()
             for mode in Constants.DELIVERY_MODES
                 this._modeMenu.Add(mode, ObjBindMethod(this, "_OnMode", mode), "Radio")
+            this._copyMenu := Menu()
+            for mode in Constants.COPY_MODES
+                this._copyMenu.Add(Constants.COPY_MODE_LABELS[mode], ObjBindMethod(this, "_OnCopyMode", mode), "Radio")
             this._statusText := Constants.APP_NAME
             this._menu.Add(this._statusText, ObjBindMethod(this, "_OnStatus"))
             this._menu.Disable("1&")                                ; the status line is display-only
@@ -111,13 +116,14 @@ class TrayMenu {
             for id in ["show", "generate", "load", "back", "restart", "clear"]
                 this._menu.Add(this._labels[id], ObjBindMethod(this, "_OnAction", id))
             this._menu.Add()
+            this._menu.Add("Copy mode", this._copyMenu)
             this._menu.Add("Auto-advance", this._advanceMenu)
             this._menu.Add("Insert mode", this._modeMenu)
             this._menu.Add()
             for key in ["ExtraHotkeys", "ShowNextInTooltip", "RememberList"]
                 this._menu.Add(this._toggleLabels[key], ObjBindMethod(this, "_OnToggle", key))
             this._menu.Add()
-            this._pauseText := "Pause ListPaster"
+            this._pauseText := this._OnOffText(false)
             this._menu.Add(this._pauseText, ObjBindMethod(this, "_OnPause"))
             this._menu.Add(this._labels["exit"], ObjBindMethod(this, "_OnAction", "exit"))
             this._menu.Default := this._labels["show"]              ; double-clicking the icon opens the list window
@@ -151,6 +157,12 @@ class TrayMenu {
                     this._modeMenu.Check(mode)
                 else
                     this._modeMenu.Uncheck(mode)
+            }
+            for mode in Constants.COPY_MODES {
+                if (mode = state.copy)
+                    this._copyMenu.Check(Constants.COPY_MODE_LABELS[mode])
+                else
+                    this._copyMenu.Uncheck(Constants.COPY_MODE_LABELS[mode])
             }
             for key, checked in state.checks {
                 if checked
@@ -186,6 +198,15 @@ class TrayMenu {
 
     _OnMode(mode, *) {
         this._prefs.Set("DeliveryMode", mode)
+    }
+
+    _OnCopyMode(mode, *) {
+        this._prefs.Set("CopyMode", mode)
+    }
+
+    ; The on/off item, with its shortcut shown right-aligned (text after a tab).
+    _OnOffText(paused) {
+        return (paused ? "Turn on " : "Turn off ") Constants.APP_NAME "`t" this._hotkeys.Describe(Constants.HK_TOGGLE_ON)
     }
 
     _OnToggle(key, *) {

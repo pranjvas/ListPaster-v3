@@ -484,25 +484,31 @@ Test_A12_Shortcuts() {
 Test_A13_TrayState() {
     Assert.Eq(StrLen("·") "/" StrLen("—"), "1/1", "script files are read as UTF-8, so menu symbols show correctly")
     env := NewTrayEnv()
-    cfg := {advance: "Tab", mode: "Type", extra: 0, showNext: 0, remember: 0}
+    cfg := {advance: "Tab", mode: "Type", extra: 0, showNext: 0, remember: 0, copy: "List"}
 
     st := env.tray.BuildState({count: 0, position: 0, next: ""}, cfg, false, false)
-    Assert.Eq(st.status, "No list loaded", "status with no list")
+    Assert.Eq(st.status, "ON · No list loaded", "status with no list")
     Assert.Eq(st.enabled["back"] "" st.enabled["restart"] "" st.enabled["clear"], "000", "Step back, Restart and Clear are greyed with no list")
-    Assert.Eq(st.tip, "ListPaster — No list loaded", "tooltip with no list")
+    Assert.Eq(st.tip, "ListPaster — ON · No list loaded", "tooltip with no list")
 
     st := env.tray.BuildState({count: 10, position: 4, next: "Cam-005"}, cfg, false, false)
-    Assert.Eq(st.status, "Next: 5 of 10 · Tab · Type", "mid-list status shows the next item number and both modes")
+    Assert.Eq(st.status, "ON · Next: 5 of 10 · Tab · Type", "mid-list status shows the next item number and both modes")
     Assert.Eq(st.enabled["back"] "" st.enabled["restart"] "" st.enabled["clear"], "111", "everything is enabled mid-list")
     Assert.Eq(InStr(st.tip, "Cam-005"), 0, "the next item is hidden from the tooltip by default")
-    Assert.Eq(st.advance "/" st.mode "/" st.pauseText, "Tab/Type/Pause ListPaster", "radio choices and pause item follow the state")
+    Assert.Eq(st.advance "/" st.mode "/" st.pauseText, "Tab/Type/Turn off ListPaster`tWin+Alt+V", "radio choices and the on/off item follow the state")
 
     st := env.tray.BuildState({count: 10, position: 0, next: "Cam-001"}, cfg, false, false)
     Assert.Eq(st.enabled["back"] "" st.enabled["restart"] "" st.enabled["clear"], "001", "Step back and Restart are greyed at the first item")
     st := env.tray.BuildState({count: 10, position: 10, next: ""}, cfg, false, false)
-    Assert.Eq(st.status, "List complete (10 of 10)", "status at the end of the list")
+    Assert.Eq(st.status, "ON · List complete (10 of 10)", "status at the end of the list")
     st := env.tray.BuildState({count: 10, position: 4, next: "Cam-005"}, cfg, true, false)
-    Assert.Eq(st.status "/" st.pauseText, "Paused — Next: 5 of 10 · Tab · Type/Resume ListPaster", "paused shows first and the item reads Resume")
+    Assert.Eq(st.status "/" st.pauseText, "OFF — Next: 5 of 10 · Tab · Type/Turn on ListPaster`tWin+Alt+V", "OFF shows first and the item reads Turn on")
+    cfg.copy := "Queue"
+    st := env.tray.BuildState({count: 0, position: 0, next: ""}, cfg, false, false)
+    Assert.Eq(st.status "/" st.copy, "ON · Nothing queued/Queue", "Queue mode: empty status and the Copy mode radio")
+    st := env.tray.BuildState({count: 10, position: 10, next: ""}, cfg, false, false)
+    Assert.Eq(st.status, "ON · All 10 pasted", "Queue mode: finished status")
+    cfg.copy := "List"
 
     cfg.showNext := 1
     st := env.tray.BuildState({count: 10, position: 4, next: "A&B`tcol2"}, cfg, false, false)
@@ -529,28 +535,30 @@ Test_A13_TrayState() {
     env.items.Load(["a", "b", "c"])
     env.tray.Start()
     hMenu := A_TrayMenu.Handle
-    Assert.Eq(DllCall("GetMenuItemCount", "Ptr", hMenu), 18, "the tray menu has the planned 18 entries (separators included)")
-    Assert.Eq(MenuText(hMenu, 0) "/" MenuGreyed(hMenu, 0), "Next: 1 of 3 · None · Paste/1", "the first item is the greyed status line")
+    Assert.Eq(DllCall("GetMenuItemCount", "Ptr", hMenu), 19, "the tray menu has the planned 19 entries (separators included)")
+    Assert.Eq(MenuText(hMenu, 0) "/" MenuGreyed(hMenu, 0), "ON · Next: 1 of 3 · None · Paste/1", "the first item is the greyed status line")
     Assert.Eq(MenuGreyed(hMenu, 5) "/" MenuGreyed(hMenu, 6) "/" MenuGreyed(hMenu, 7), "1/1/0", "Step back and Restart are greyed at item 1; Clear is not")
-    Assert.Eq(MenuText(hMenu, 16) "/" MenuText(hMenu, 17), "Pause ListPaster/Exit", "Pause and Exit are at the bottom")
+    Assert.Eq(MenuText(hMenu, 9), "Copy mode", "Copy mode comes before Auto-advance")
+    Assert.Eq(MenuText(hMenu, 17) "/" MenuText(hMenu, 18), "Turn off ListPaster`tWin+Alt+V/Exit", "Turn off and Exit are at the bottom")
     Assert.Eq(A_TrayMenu.Default, "Show list window", "double-clicking the icon opens the list window")
 
     env.items.Advance()
     Assert.True(env.timer.Has("trayRefresh"), "a paste schedules a tray refresh instead of redrawing inside the paste")
     env.timer.Run("trayRefresh")
-    Assert.Eq(MenuText(hMenu, 0) "/" MenuGreyed(hMenu, 5), "Next: 2 of 3 · None · Paste/0", "after a paste the status updates and Step back is enabled")
+    Assert.Eq(MenuText(hMenu, 0) "/" MenuGreyed(hMenu, 5), "ON · Next: 2 of 3 · None · Paste/0", "after a paste the status updates and Step back is enabled")
 
     env.tray._OnToggle("RememberList")
     env.timer.Run("trayRefresh")
-    Assert.Eq(env.prefs.Get("RememberList") "/" MenuChecked(hMenu, 14), "1/1", "a toggle item flips its setting and shows a tick")
+    Assert.Eq(env.prefs.Get("RememberList") "/" MenuChecked(hMenu, 15), "1/1", "a toggle item flips its setting and shows a tick")
     env.tray._OnAdvance("Enter")
-    env.tray._OnMode("Paste")
-    Assert.Eq(env.prefs.Get("AdvanceMode") "/" env.prefs.Get("DeliveryMode"), "Enter/Paste", "the radio items change their settings")
+    env.tray._OnMode("Type")
+    env.tray._OnCopyMode("List")
+    Assert.Eq(env.prefs.Get("AdvanceMode") "/" env.prefs.Get("DeliveryMode") "/" env.prefs.Get("CopyMode"), "Enter/Type/List", "the radio items change their settings")
     env.tray.OnPausedChanged(true)
     env.hk.SetPaused(true)
     env.timer.Run("trayRefresh")
-    Assert.Eq(MenuText(hMenu, 0), "Paused — Next: 2 of 3 · Enter · Paste", "the status line shows paused and the new modes")
-    Assert.Eq(MenuText(hMenu, 16), "Resume ListPaster", "the pause item becomes Resume")
+    Assert.Eq(MenuText(hMenu, 0), "OFF — Next: 2 of 3 · Enter · Type", "the status line shows OFF and the new modes")
+    Assert.Eq(MenuText(hMenu, 17), "Turn on ListPaster`tWin+Alt+V", "the on/off item becomes Turn on")
     env.hk.SetPaused(false)
     for id in ["show", "generate", "load", "back", "restart", "clear", "exit"]
         env.tray._OnAction(id)
