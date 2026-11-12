@@ -5,7 +5,7 @@
 */
 class Constants {
     static APP_NAME := "ListPaster"
-    static VERSION := "3.2"
+    static VERSION := "3.2-q1"
 
     ; --- Files (relative to A_ScriptDir) ---
     static ERROR_LOG := "error.log"
@@ -14,7 +14,8 @@ class Constants {
     static SESSION_FILE := "data\session.ini"
 
     ; --- Hotkeys (<! = left Alt only, so AltGr+letter still types characters like ż) ---
-    static HK_PASTE_NEXT := "^+v"
+    static HK_PASTE_NEXT := "#v"             ; Win+V while ON; while OFF Windows gets it back (clipboard history)
+    static HK_TOGGLE_ON := "#!v"             ; Win+Alt+V turns ListPaster ON/OFF; works even while OFF
     static HK_UNDO := "^<!z"
     static HK_BACK := "^<!b"
     static HK_RESET := "^<!r"
@@ -28,6 +29,8 @@ class Constants {
     static ADVANCE_MODES := ["None", "Tab", "Enter"]
     static ADVANCE_KEYS := Map("None", "", "Tab", "{Tab}", "Enter", "{Enter}")
     static DELIVERY_MODES := ["Type", "Paste"]
+    static COPY_MODES := ["Queue", "List"]   ; Queue: every copy appends one item. List: a copied list replaces the list
+    static COPY_MODE_LABELS := Map("Queue", "Queue each copy", "List", "Load copied lists")
 
     ; --- ItemList change kinds ---
     static KIND_LOAD := "load"
@@ -38,6 +41,7 @@ class Constants {
     static KIND_RESET := "reset"
     static KIND_JUMP := "jump"
     static KIND_EDIT := "edit"
+    static KIND_APPEND := "append"
 
     ; --- Timing ---
     static TICK_MS := 50
@@ -48,11 +52,15 @@ class Constants {
     static MENU_FOCUS_DELAY_MS := 300
     static FOCUS_RECORD_DELAY_MS := 100
     static KEY_RELEASE_WAIT_S := 3           ; how long Paste next / Undo wait for you to let go of the shortcut
+    static DUP_WINDOW_MS := 1000             ; the same text copied again this soon is one copy written twice
+    static QUEUE_PREVIEW_MAX := 60           ; characters of a queued item shown in its tooltip
 
     ; --- Settings defaults (key -> default) ---
     static SETTINGS_DEFAULTS := Map(
         "AdvanceMode", "None",
-        "DeliveryMode", "Type",
+        "DeliveryMode", "Paste",
+        "CopyMode", "Queue",
+        "StartOn", 1,
         "PastePreDelayMs", 250,
         "PastePostDelayMs", 250,
         "WindowVisible", 0,

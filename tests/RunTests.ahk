@@ -332,27 +332,37 @@ Test_A10_Settings() {
     prefs := Settings(ini)
     prefs.Load()
     Assert.Eq(prefs.Get("AdvanceMode"), "None", "default auto-advance is None")
-    Assert.Eq(prefs.Get("DeliveryMode"), "Type", "default insert mode is Type")
+    Assert.Eq(prefs.Get("DeliveryMode"), "Paste", "default insert mode is Paste")
+    Assert.Eq(prefs.Get("CopyMode"), "Queue", "default copy mode is Queue")
+    Assert.Eq(prefs.Get("StartOn"), 1, "starts ON by default")
     for key in ["ExtraHotkeys", "ShowNextInTooltip", "RememberList"]
         Assert.Eq(prefs.Get(key), 0, key " is off by default")
 
     for key in ["ExtraHotkeys", "ShowNextInTooltip", "RememberList"]
         prefs.Set(key, 1)
     prefs.Set("AdvanceMode", "tab")
+    prefs.Set("CopyMode", "list")
+    prefs.Set("StartOn", 0)
     reloaded := Settings(ini)
     reloaded.Load()
     for key in ["ExtraHotkeys", "ShowNextInTooltip", "RememberList"]
         Assert.Eq(reloaded.Get(key), 1, key " survives a restart")
     Assert.Eq(reloaded.Get("AdvanceMode"), "Tab", "mode names are stored with canonical spelling")
+    Assert.Eq(reloaded.Get("CopyMode"), "List", "copy mode stored with canonical spelling")
+    Assert.Eq(reloaded.Get("StartOn"), 0, "StartOn=0 survives a restart")
 
     IniWrite("Sideways", ini, "Settings", "AdvanceMode")
     IniWrite("7", ini, "Settings", "RememberList")
     IniWrite("yes", ini, "Settings", "ExtraHotkeys")
+    IniWrite("Sideways", ini, "Settings", "CopyMode")
+    IniWrite("2", ini, "Settings", "StartOn")
     bad := Settings(ini)
     bad.Load()
     Assert.Eq(bad.Get("AdvanceMode"), "None", "an invalid auto-advance value falls back to None")
     Assert.Eq(bad.Get("RememberList"), 0, "an out-of-range toggle falls back to off")
     Assert.Eq(bad.Get("ExtraHotkeys"), 0, "a non-numeric toggle falls back to off")
+    Assert.Eq(bad.Get("CopyMode"), "Queue", "an invalid copy mode falls back to Queue")
+    Assert.Eq(bad.Get("StartOn"), 1, "an out-of-range StartOn falls back to ON")
 
     env := NewControllerEnv()
     seen := ""
@@ -362,9 +372,9 @@ Test_A10_Settings() {
     }
     Assert.Eq(seen, "None>Tab>Enter>None>", "auto-advance cycles None, Tab, Enter, None")
     env.ctl.ToggleDelivery()
-    Assert.Eq(env.prefs.Get("DeliveryMode"), "Paste", "Type switches to Paste")
+    Assert.Eq(env.prefs.Get("DeliveryMode"), "Type", "Paste switches to Type")
     env.ctl.ToggleDelivery()
-    Assert.Eq(env.prefs.Get("DeliveryMode"), "Type", "Paste switches back to Type")
+    Assert.Eq(env.prefs.Get("DeliveryMode"), "Paste", "Type switches back to Paste")
 }
 
 Test_A11_Persistence() {
@@ -505,7 +515,7 @@ Test_A13_TrayState() {
     env.tray.Start()
     hMenu := A_TrayMenu.Handle
     Assert.Eq(DllCall("GetMenuItemCount", "Ptr", hMenu), 18, "the tray menu has the planned 18 entries (separators included)")
-    Assert.Eq(MenuText(hMenu, 0) "/" MenuGreyed(hMenu, 0), "Next: 1 of 3 · None · Type/1", "the first item is the greyed status line")
+    Assert.Eq(MenuText(hMenu, 0) "/" MenuGreyed(hMenu, 0), "Next: 1 of 3 · None · Paste/1", "the first item is the greyed status line")
     Assert.Eq(MenuGreyed(hMenu, 5) "/" MenuGreyed(hMenu, 6) "/" MenuGreyed(hMenu, 7), "1/1/0", "Step back and Restart are greyed at item 1; Clear is not")
     Assert.Eq(MenuText(hMenu, 16) "/" MenuText(hMenu, 17), "Pause ListPaster/Exit", "Pause and Exit are at the bottom")
     Assert.Eq(A_TrayMenu.Default, "Show list window", "double-clicking the icon opens the list window")
@@ -513,7 +523,7 @@ Test_A13_TrayState() {
     env.items.Advance()
     Assert.True(env.timer.Has("trayRefresh"), "a paste schedules a tray refresh instead of redrawing inside the paste")
     env.timer.Run("trayRefresh")
-    Assert.Eq(MenuText(hMenu, 0) "/" MenuGreyed(hMenu, 5), "Next: 2 of 3 · None · Type/0", "after a paste the status updates and Step back is enabled")
+    Assert.Eq(MenuText(hMenu, 0) "/" MenuGreyed(hMenu, 5), "Next: 2 of 3 · None · Paste/0", "after a paste the status updates and Step back is enabled")
 
     env.tray._OnToggle("RememberList")
     env.timer.Run("trayRefresh")
@@ -625,13 +635,15 @@ NewPrefs() {
     return prefs
 }
 
-NewControllerEnv() {
+; copyMode "List" keeps upstream's copy rules for the original tests.
+NewControllerEnv(copyMode := "List") {
     env := {}
     env.items := ItemList()
     env.clip := FakeClip()
     env.delivery := FakeDelivery(env.clip)
     env.tips := FakeTips()
     env.prefs := NewPrefs()
+    env.prefs.Set("CopyMode", copyMode)
     env.ctl := PasteController(env.items, env.delivery, env.clip, env.tips, env.prefs)
     env.items.OnChange(ObjBindMethod(env.ctl, "OnListChanged"))
     return env

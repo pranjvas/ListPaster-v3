@@ -68,9 +68,11 @@ class Settings {
                 return this._OneOf(key, value, Constants.ADVANCE_MODES, fallback)
             case "DeliveryMode":
                 return this._OneOf(key, value, Constants.DELIVERY_MODES, fallback)
+            case "CopyMode":
+                return this._OneOf(key, value, Constants.COPY_MODES, fallback)
             case "PastePreDelayMs", "PastePostDelayMs":
                 return this._IntInRange(key, value, 0, 5000, fallback)
-            case "WindowVisible", "ExtraHotkeys", "ShowNextInTooltip", "RememberList":
+            case "WindowVisible", "ExtraHotkeys", "ShowNextInTooltip", "RememberList", "StartOn":
                 return this._IntInRange(key, value, 0, 1, fallback)
             case "WindowW", "WindowH":
                 return this._IntInRange(key, value, 100, 4000, fallback)
