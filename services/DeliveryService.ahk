@@ -87,6 +87,8 @@ class DeliveryService {
             return {erased: false, reason: "you moved to another field"}
         if InStr(record.text, "`t")
             return {erased: false, reason: "item contains tabs"}
+        if RegExMatch(record.text, "[`r`n]")
+            return {erased: false, reason: "item has line breaks"}   ; apps count CRLF as 1 or drop it: Backspaces would overshoot
         keys := this._UndoKeys(record)
         if (keys = "")
             return {erased: false, reason: "Enter may have submitted"}

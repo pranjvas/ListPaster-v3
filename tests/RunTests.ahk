@@ -205,6 +205,14 @@ Test_A6_UndoKeys() {
         rec := {text: "abc", app: parts[1], advance: parts[2], mode: parts[3]}
         Assert.Eq(dEnv.dlv._UndoKeys(rec), keys, "undo keys for " combo)
     }
+
+    ; Final review: Backspace counts can't match line breaks (CRLF is one caret step; single-line fields drop them),
+    ; so Undo must not guess and erase the user's own text.
+    for text in ["ab`r`ncd", "ab`ncd", "Smith`r`n"] {
+        sent := dEnv.sender.calls.Length
+        res := dEnv.dlv.Erase({text: text, app: "other", advance: "None", mode: "Paste", hwnd: 100, focusCtrl: 0})
+        Assert.Eq(res.erased "/" res.reason "/" (dEnv.sender.calls.Length - sent), "0/item has line breaks/0", "undo refuses to erase an item with line breaks: " StrReplace(StrReplace(text, "`r", "\r"), "`n", "\n"))
+    }
 }
 
 Test_A7_Delivery() {
