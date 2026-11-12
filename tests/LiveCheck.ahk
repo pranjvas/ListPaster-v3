@@ -10,8 +10,10 @@
     Usage (Git Bash):
         MSYS_NO_PATHCONV=1 "/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe" /ErrorStdOut tests/LiveCheck.ahk | cat
         ... tests/LiveCheck.ahk paste 2 "web-oneweb-two"   ; paste 2 already-queued items, compare with the text
-    Needs default settings (Copy mode Queue, insert mode Paste, auto-advance None). Exit code = failed checks.
-    Don't type or click while it runs (about 15 seconds): it sends real keystrokes.
+    Needs default settings (Copy mode Queue, insert mode Paste, auto-advance None, Remember list off, StartOn 1).
+    "full" restarts ListPaster, so anything queued in the running copy is discarded. Exit code = failed checks.
+    Don't type or click while it runs (about 15 seconds): it sends real keystrokes. It stops before sending a key
+    if its own test window isn't the active window.
 */
 
 global passed := 0
@@ -20,6 +22,8 @@ global repo := RegExReplace(A_ScriptDir, "\\tests$")
 global mainTitle := repo "\Main.ahk ahk_class AutoHotkey"
 global listenerLog := A_Temp "\ListPasterLiveCheck-listener.log"
 global listenerPid := 0
+global appState := "unknown"    ; "on" / "off" once this run started ListPaster itself; toggles flip it
+global clipChanged := false     ; true once this run wrote to the clipboard
 
 SendLevel(1)                ; ListPaster reacts to keys from another script only when they are sent above level 0
 DetectHiddenWindows(true)   ; to find ListPaster's hidden main window
@@ -50,11 +54,13 @@ Full(g) {
     if !DefaultsInUse()
         return
     StartListener()             ; before ListPaster, so it only hears the Win+V that ListPaster lets through
+    if WinExist(mainTitle)
+        Out("note: restarting ListPaster; anything it had queued is discarded")
     StartApp()
 
     ; 1. Three copies written by a program (a website's copy button writes the clipboard the same way)
     for text in ["alpha", "beta`nline2", "gamma"] {
-        A_Clipboard := text
+        SetClip(text)
         Sleep(300)
     }
     loop 3
@@ -68,8 +74,8 @@ Full(g) {
     Check(EditText(g) == "alphabeta`nline2gamma", "the clipboard restore after pasting was not queued")
 
     ; 3. OFF: copies are ignored and Win+V goes back to Windows
-    Press("#!v")
-    A_Clipboard := "delta"
+    Toggle()
+    SetClip("delta")
     Sleep(300)
     before := EditText(g)
     PressInto(g, "#v")
@@ -77,10 +83,10 @@ Full(g) {
     Check(ListenerHeard() = 1, "while OFF, Win+V is passed on to Windows (passed on: " ListenerHeard() ")")
 
     ; 4. Back ON: pasted items were cleared, the copy made while OFF wasn't queued, new copies are
-    Press("#!v")
+    Toggle()
     PressInto(g, "#v")
     Check(EditText(g) == before, "after turning ON, nothing old is pasted (got: " Show(EditText(g)) ")")
-    A_Clipboard := "epsilon"
+    SetClip("epsilon")
     Sleep(300)
     PressInto(g, "#v")
     Check(SubStr(EditText(g), -7) == "epsilon", "a copy made after turning back ON is pasted")
@@ -104,7 +110,7 @@ PasteOnly(g, n, expected) {
 
 DefaultsInUse() {
     ini := repo "\data\settings.ini"
-    want := Map("CopyMode", "Queue", "DeliveryMode", "Paste", "AdvanceMode", "None", "StartOn", "1")
+    want := Map("CopyMode", "Queue", "DeliveryMode", "Paste", "AdvanceMode", "None", "StartOn", "1", "RememberList", "0")
     for key, value in want {
         got := IniRead(ini, "Settings", key, value)
         if (got != value) {
@@ -131,8 +137,13 @@ ListenerHeard() {
 }
 
 StartApp() {
+    global appState
     Run('"' A_AhkPath '" "' repo '\Main.ahk"', repo)     ; #SingleInstance Force replaces a running copy
-    Check(WinWait(mainTitle, , 5), "ListPaster started")
+    started := WinWait(mainTitle, , 5)
+    Check(started, "ListPaster started")
+    if !started
+        throw Error("ListPaster did not start")
+    appState := "on"                                     ; StartOn=1 was checked in DefaultsInUse
     Sleep(1500)
 }
 
@@ -145,12 +156,15 @@ TestWindow() {
 
 Activate(g) {
     WinActivate("ahk_id " g.Hwnd)
-    WinWaitActive("ahk_id " g.Hwnd, , 2)
+    if !WinWaitActive("ahk_id " g.Hwnd, , 2)
+        throw Error("the test window lost focus; stopped before sending keys to another window")
     ControlFocus(g["E"])
 }
 
 PressInto(g, keys) {
     Activate(g)
+    if !WinActive("ahk_id " g.Hwnd)
+        throw Error("the test window lost focus; stopped before sending keys to another window")
     Send(keys)
     Sleep(1000)                 ; Paste mode waits 250 ms before and after Ctrl+V
 }
@@ -160,16 +174,34 @@ Press(keys) {
     Sleep(500)
 }
 
-; Puts the user's clipboard back while ListPaster is OFF, so it isn't queued; turning ON again clears pasted items.
+; Win+Alt+V, keeping track of the ON/OFF state when this run knows it.
+Toggle() {
+    global appState
+    Press("#!v")
+    if (appState != "unknown")
+        appState := (appState = "on") ? "off" : "on"
+}
+
+SetClip(text) {
+    global clipChanged
+    A_Clipboard := text
+    clipChanged := true
+}
+
+; Puts the user's clipboard back only if this run changed it, while ListPaster is OFF so it isn't queued, and
+; leaves ListPaster ON (turning ON clears the test's pasted items). Never toggles a copy it doesn't know the state of.
 QuietRestore(saved) {
-    if !WinExist(mainTitle) {
+    if !clipChanged
+        return
+    if (appState = "unknown" || !WinExist(mainTitle)) {
         A_Clipboard := saved
         return
     }
-    Press("#!v")
+    if (appState = "on")
+        Toggle()
     A_Clipboard := saved
     Sleep(300)
-    Press("#!v")
+    Toggle()
 }
 
 EditText(g) => StrReplace(g["E"].Value, "`r`n", "`n")
