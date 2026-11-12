@@ -1,11 +1,30 @@
-# ListPaster
+# ListPaster (copy-queue fork)
 
-**Paste a list one line at a time.** Copy a list (a column from Excel, serial
-numbers, names, IP addresses), then press **Ctrl+Shift+V**. Each press enters
-the next item into whatever field has focus. It's made for data entry into web
-forms, spreadsheets and remote-desktop apps that won't take a bulk paste.
+**Copy things from anywhere, then paste them one at a time, in order.** While ListPaster is ON, every text you copy
+is added to a queue: Ctrl+C, right-click → Copy, a website's copy button, or any program writing to the clipboard.
+Press **Win+V** in any app to paste the next queued item. **Win+Alt+V** turns ListPaster ON or OFF.
+
+This is a fork of [beepboop1998/ListPaster-v3](https://github.com/beepboop1998/ListPaster-v3) (MIT). The fork adds
+the copy queue, the Win+V / Win+Alt+V shortcuts and starting ON. Everything else (undo, auto Tab/Enter, the list
+window, the generator) is upstream's work.
 
 It's a free, open-source (MIT) AutoHotkey v2 script for Windows.
+
+## What this fork changes
+
+| | Upstream ListPaster | This fork |
+|---|---|---|
+| Copying | Only a copied list of 2+ lines loads, replacing the list | **Every copy** is queued as one item, from any source; multi-line copies stay whole |
+| Paste next | Ctrl+Shift+V | **Win+V** (while ON) |
+| On/off | Tray: Pause / Resume | **Win+Alt+V**, which works while OFF, or tray: Turn off / Turn on |
+| At start | Always active | ON. Set `StartOn=0` in `data\settings.ini` to start OFF |
+| Insert mode default | Type | Paste (clipboard + Ctrl+V; your clipboard is put back afterwards) |
+
+- **Duplicate guard.** The same text arriving twice within 1 second is queued once, because some sites write the
+  clipboard twice per click. Copying it again later queues it again.
+- **Turning ON** clears items that were already pasted and keeps the ones still waiting.
+- **While OFF**, copies are ignored and Win+V goes back to Windows (clipboard history).
+- **Copy mode ▸ Load copied lists** in the tray brings back upstream's behaviour.
 
 ## What it's for
 
@@ -17,56 +36,62 @@ It's a free, open-source (MIT) AutoHotkey v2 script for Windows.
 ## Quick start
 
 1. Install [AutoHotkey v2.0](https://www.autohotkey.com/).
-2. Download this repo (**Code → Download ZIP**) and extract it.
+2. Clone this repo, or use **Code → Download ZIP** and extract it.
 3. Double-click `Main.ahk`. A green **H** icon appears in the system tray. On Windows 11 it may be hidden behind
    the **^** arrow; drag it onto the taskbar, or turn it on under
    **Settings → Personalization → Taskbar → Other system tray icons**, so the menu is one click away.
-4. Copy two or more lines, click into the first field, and press **Ctrl+Shift+V**.
+4. Copy a few things, click into the field you want to fill, and press **Win+V** once per item.
+5. To start it with Windows, press **Win+R**, type `shell:startup`, and add a shortcut there whose target is
+   `"C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" "<path to this folder>\Main.ahk"`.
 
 ## Shortcuts
 
-Only two shortcuts are always on, because they act on the field you're typing in:
+Three shortcuts work in every app:
 
 | Keys | Action |
 |---|---|
-| **Ctrl+Shift+V** | Paste the next item |
+| **Win+Alt+V** | Turn ListPaster ON/OFF. Works while OFF |
+| **Win+V** | Paste the next item (while ON) |
 | **Ctrl+Alt+Z** (left Alt) | Undo the last paste: erase it and step back, so the next paste repeats it |
 
 Everything else is in the **tray menu** (right-click the icon):
 
 | Item | What it does |
 |---|---|
-| *Next: 5 of 10 · Tab · Type* | Status line: next item, list size, auto-advance and insert mode |
+| *ON · Next: 5 of 10 · Tab · Paste* | Status line: ON/OFF, next item, list size, auto-advance and insert mode |
 | Show list window | Opens the list window (double-clicking the icon does the same) |
 | Generate list... | Makes a numbered or IP-address list |
 | Load from clipboard | Uses what's on the clipboard as the list, even a single line (asks first if your list is unfinished) |
 | Step back | Next paste repeats the previous item. Nothing already entered is changed |
 | Restart at top | Next paste is item 1 again |
 | Clear list | Empties the list (asks first if it's unfinished) |
+| Copy mode ▸ | Queue each copy (default: every copy is added) / Load copied lists (upstream: a copied list replaces the list) |
 | Auto-advance ▸ | None / Tab / Enter, pressed after each item |
 | Insert mode ▸ | Type (keystrokes) / Paste (clipboard + Ctrl+V) |
 | Extra hotkeys | Turns on the shortcuts below |
 | Show next item in tooltip | Shows the next item when you hover the icon (off by default) |
 | Remember list after exit | Keeps the list and position between restarts (off by default) |
-| Pause / Resume ListPaster | Gives every shortcut back to your apps and ignores copies until you resume |
+| Turn off / Turn on ListPaster | Same as Win+Alt+V. OFF gives every shortcut back to your apps and ignores copies |
 | Exit | Asks first if an unfinished list would be lost |
 
 **Extra hotkeys** (off by default, left Alt only): Ctrl+Alt+**B** step back · **R** restart at top ·
 **L** load from clipboard · **A** cycle auto-advance · **P** switch Type/Paste · **W** show/hide the list window ·
 **G** generate list.
 
-After using the tray menu, click back into your field before the next paste. Ctrl+Shift+V won't type into
+After using the tray menu, click back into your field before the next paste. Win+V won't type into
 ListPaster's own windows, the taskbar, or the desktop; it tells you to click into a field instead.
 
 ## How the list works
 
-- **Loading.** Copying text with two or more lines loads it as the list and replaces the current one, even
+- **Queue (default Copy mode).** Each copy adds one item at the end of the list, exactly as copied. Your place
+  doesn't move, so after the last item a new copy becomes the next one. Blank copies are ignored.
+- **Loading (Copy mode ▸ Load copied lists).** Copying text with two or more lines loads it as the list and replaces the current one, even
   mid-list. Copying a single line never replaces the list, and copying the same list again keeps your place
   (unless it's complete, then it starts again from the top).
 - **One line = one item.** Lines that are empty or only spaces are skipped, and everything else is kept
   exactly. A row copied from several spreadsheet columns stays one item with tabs in it: Type mode presses
   Tab between the parts, and Paste mode pastes the tabs (which fills the cells next to it in Excel).
-- **Each Ctrl+Shift+V advances by one**, only once the item was handed to Windows without error. Quick
+- **Each Win+V advances by one**, only once the item was handed to Windows without error. Quick
   repeated presses each insert one item, in order. The item is typed the moment you let go of the keys, so
   Ctrl and Shift can't be left stuck down. Hold them longer than 3 seconds and nothing is typed (Undo works
   the same way).
@@ -110,9 +135,10 @@ LibreOffice Calc. It can't read what's in other apps' fields, so:
 
 ## Shortcut conflicts
 
-**Ctrl+Shift+V** is "paste as plain text" in Chrome, Edge, Firefox and Google Docs. It's "paste values" in Google
-Sheets and recent Excel, and it has other meanings in Word, Outlook, Windows Terminal and VS Code. While
-ListPaster is running it takes this shortcut in every app; **Pause** it from the tray to give it back.
+**Win+V** opens Windows' clipboard history. While ListPaster is ON it takes Win+V in every app; turn ListPaster
+OFF with **Win+Alt+V** to give it back. Win+Alt+V isn't a Windows shortcut. PowerToys' Paste as Plain Text is
+Ctrl+Win+Alt+V, a different combination. This fork no longer uses Ctrl+Shift+V, so browsers' paste-as-plain-text
+works again.
 
 The Ctrl+Alt shortcuts use the **left** Alt key only, so AltGr typing on non-US keyboards (ą, ł, ż, @, €…) keeps
 working. To use different keys, edit the `HK_` lines in `Constants.ahk`; ListPaster tells you at startup if a key
@@ -154,14 +180,21 @@ ListPaster/
 ├── gui/                  ; TrayMenu, ListWindow, SequenceDialog
 ├── lib/                  ; SequenceBuilder (pure number/IP generation)
 ├── tests/                ; RunTests.ahk: automated tests, no desktop interaction
+│                         ; LiveCheck.ahk: end-to-end check with the real shortcuts (sends keystrokes)
 ├── legacy/               ; ListPaster_v2.ahk, the untouched v2 baseline
 └── data/                 ; created at runtime (settings; the list only if remembered)
 ```
 
-Run the tests from Git Bash:
+Run the tests from Git Bash. `MSYS_NO_PATHCONV=1` stops Git Bash from turning `/ErrorStdOut` into a file path:
 
 ```bash
-"/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe" /ErrorStdOut tests/RunTests.ahk | cat
+MSYS_NO_PATHCONV=1 "/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe" /ErrorStdOut tests/RunTests.ahk | cat
+```
+
+The live check starts ListPaster and presses the real shortcuts for about 15 seconds, so don't type while it runs:
+
+```bash
+MSYS_NO_PATHCONV=1 "/c/Program Files/AutoHotkey/v2/AutoHotkey64.exe" /ErrorStdOut tests/LiveCheck.ahk | cat
 ```
 
 ## License
