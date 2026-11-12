@@ -1,8 +1,9 @@
 /*
     PasteController.ahk
     Responsibility: user actions from shortcuts, the tray menu and clipboard events (paste, undo, step back, restart,
-                    load, clear, exit, mode switches). A copied list replaces the current one (the same list keeps its
-                    place); menu actions ask before discarding an unfinished list.
+                    load, clear, exit, mode switches, on/off). Copy mode Queue: every copy from any program is
+                    appended as one item. Copy mode List: a copied list replaces the current one (the same list
+                    keeps its place). Menu actions ask before discarding an unfinished list.
     Dependencies: ItemList, DeliveryService, ClipboardService, Notifier, Settings
 */
 class PasteController {
@@ -14,9 +15,12 @@ class PasteController {
     _prefs := ""        ; Settings
     _undo := []         ; delivery records, newest last
     _paused := false    ; while paused, copies are ignored
+    _clock := ""        ; callable() -> milliseconds; A_TickCount unless a test passes its own
+    _lastAppendText := ""
+    _lastAppendTick := ""
 
     ; --- Constructor ---
-    __New(items, delivery, clip, tips, prefs) {
+    __New(items, delivery, clip, tips, prefs, clock := "") {
         for dep in [items, delivery, clip, tips, prefs] {
             if !IsObject(dep)
                 throw Error("Missing dependency", A_ThisFunc)
@@ -26,19 +30,21 @@ class PasteController {
         this._clip := clip
         this._tips := tips
         this._prefs := prefs
+        this._clock := HasMethod(clock) ? clock : () => A_TickCount
     }
 
     ; --- Public Methods: shortcuts ---
     ; hotkey: the shortcut that fired (e.g. "$^+v"); its keys must be released before anything is typed.
     PasteNext(hotkey := "") {
         Critical                                    ; other shortcuts and clipboard events wait until this finishes
+        queue := this._IsQueueMode()
         if this._items.IsEmpty() {
-            this._tips.Show("No list loaded. Copy a list of 2+ lines, or use the tray menu.")
+            this._tips.Show(queue ? "Nothing queued yet. Copy something first." : "No list loaded. Copy a list of 2+ lines, or use the tray menu.")
             return
         }
         if this._items.IsFinished() {
             count := this._items.GetCount()
-            this._tips.Show("List complete (" count " of " count "). Tray menu → Restart at top to go again.")
+            this._tips.Show(queue ? "All " count " pasted. Copy more to queue them." : "List complete (" count " of " count "). Tray menu → Restart at top to go again.")
             return
         }
         problem := this._delivery.HeldKeysProblem(hotkey)
@@ -58,7 +64,7 @@ class PasteController {
         this._undo.Push(record)
         pos := this._items.GetPosition()
         count := this._items.GetCount()
-        this._tips.Show(pos " / " count ":  " text (pos = count ? "   (list complete)" : ""))
+        this._tips.Show(pos " / " count ":  " text (pos = count ? (queue ? "   (all pasted)" : "   (list complete)") : ""))
     }
 
     Undo(hotkey := "") {
@@ -154,6 +160,56 @@ class PasteController {
     OnClipboardText(text) {
         if this._paused
             return
+        if this._IsQueueMode()
+            this._QueueCopy(text)
+        else
+            this._LoadCopiedList(text)
+    }
+
+    OnListChanged(kind) {
+        if (kind != Constants.KIND_ADVANCE && kind != Constants.KIND_UNDO && kind != Constants.KIND_APPEND)
+            this._undo := []                        ; position moved some other way: old records no longer match
+    }
+
+    ; Turning ON (resume) in Queue mode drops what was already pasted, so a finished batch doesn't pile up.
+    OnPausedChanged(paused) {
+        this._paused := paused ? true : false
+        this._tips.Show(this._paused ? "ListPaster OFF" : "ListPaster ON: collecting copies")
+        if (!this._paused && this._IsQueueMode())
+            this._items.ClearDone()
+    }
+
+    ; --- Private Methods ---
+    _IsQueueMode() => (this._prefs.Get("CopyMode") = "Queue")
+
+    ; Queue mode: every copy (from any program) becomes one item at the end; the position doesn't move.
+    _QueueCopy(text) {
+        if (Trim(text, " `t`r`n") = "")
+            return
+        now := this._clock.Call()
+        if (this._lastAppendTick != "" && text == this._lastAppendText && now - this._lastAppendTick < Constants.DUP_WINDOW_MS)
+            return                                  ; the same copy written to the clipboard twice
+        if !this._items.Append(text)
+            return
+        this._lastAppendText := text
+        this._lastAppendTick := now
+        count := this._items.GetCount()
+        waiting := count - this._items.GetPosition()
+        this._tips.Show("Queued #" count ": " this._Preview(text) "  (" waiting " waiting)")
+    }
+
+    ; First line, cut to QUEUE_PREVIEW_MAX characters; "…" marks a cut or further lines.
+    _Preview(text) {
+        lines := StrSplit(text, "`n", "`r")
+        first := lines[1]
+        preview := SubStr(first, 1, Constants.QUEUE_PREVIEW_MAX)
+        if (StrLen(first) > Constants.QUEUE_PREVIEW_MAX || lines.Length > 1)
+            preview .= "…"
+        return preview
+    }
+
+    ; List mode (upstream behaviour): a copied list of 2+ lines replaces the current one.
+    _LoadCopiedList(text) {
         lines := this._items.ParseLines(text)
         if (lines.Length < 2)
             return                                  ; single-line copies never replace the list
@@ -165,16 +221,6 @@ class PasteController {
         this._tips.Show(this._LoadedMessage(lines.Length))
     }
 
-    OnListChanged(kind) {
-        if (kind != Constants.KIND_ADVANCE && kind != Constants.KIND_UNDO)
-            this._undo := []                        ; position moved some other way: old records no longer match
-    }
-
-    OnPausedChanged(paused) {
-        this._paused := paused ? true : false
-    }
-
-    ; --- Private Methods ---
     _MayReplace(verb) {
         if !this._items.IsUnfinished()
             return true

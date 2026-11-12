@@ -43,6 +43,7 @@ RunTest("A14 Generator", Test_A14_Generator)
 RunTest("A15 Clipboard ownership and history markers", Test_A15_ClipboardOwnership)
 RunTest("A16 Shortcut keys released before sending", Test_A16_HeldKeys)
 RunTest("A17 Queue list operations", Test_A17_ItemListQueue)
+RunTest("A18 Copy queue", Test_A18_CopyQueue)
 
 Finish()
 
@@ -662,6 +663,80 @@ Test_A17_ItemListQueue() {
     Assert.Eq(Join(lst3.ToArray()), "a|x", "append marks the list dirty")
 }
 
+Test_A18_CopyQueue() {
+    env := NewQueueEnv()
+    env.ctl.OnClipboardText("alpha")
+    env.time.now += 1500
+    env.ctl.OnClipboardText("beta`nline2")
+    Assert.Eq(Join(env.items.ToArray()) " @" env.items.GetPosition(), "alpha|beta`nline2 @0", "each copy appends one item; multi-line stays whole")
+    Assert.Eq(env.tips.Last(), "Queued #2: beta…  (2 waiting)", "the tooltip previews the first line and the waiting count")
+
+    ; Review focus 1: a copy button that writes blank first, then the text, or the same text twice
+    env.ctl.OnClipboardText("")
+    env.ctl.OnClipboardText("  ")
+    env.ctl.OnClipboardText("gamma")
+    Assert.Eq(env.items.GetCount(), 3, "queue ignores blank then text")
+    env.time.now += 400
+    env.ctl.OnClipboardText("gamma")
+    Assert.Eq(env.items.GetCount(), 3, "duplicate within 1000 ms ignored")
+    env.time.now += 1000
+    env.ctl.OnClipboardText("gamma")
+    Assert.Eq(env.items.GetCount(), 4, "same text later is queued again")
+
+    loop 4
+        env.ctl.PasteNext()
+    Assert.Eq(Join(env.delivery.delivered), "alpha|beta`nline2|gamma|gamma", "pastes in copy order")
+    Assert.Eq(env.tips.Last(), "4 / 4:  gamma   (all pasted)", "the last paste says all are pasted")
+    env.ctl.PasteNext()
+    Assert.Eq(env.tips.Last(), "All 4 pasted. Copy more to queue them.", "a press after the end explains how to continue")
+    env.ctl.OnClipboardText("delta")
+    env.ctl.PasteNext()
+    Assert.Eq(env.delivery.delivered[env.delivery.delivered.Length], "delta", "copying after the end continues")
+
+    ; Review focus 2: long and multi-line previews
+    long := ""
+    loop 100
+        long .= Chr(65 + Mod(A_Index - 1, 26))
+    pEnv := NewQueueEnv()
+    pEnv.ctl.OnClipboardText(long)
+    Assert.Eq(pEnv.tips.Last(), "Queued #1: " SubStr(long, 1, 60) "…  (1 waiting)", "preview first line, 60 chars")
+    Assert.Eq(pEnv.items.GetItem(1), long, "the queued item itself is not cut")
+
+    empty := NewQueueEnv()
+    empty.ctl.PasteNext()
+    Assert.Eq(empty.tips.Last(), "Nothing queued yet. Copy something first.", "pasting with nothing queued says to copy first")
+
+    off := NewQueueEnv()
+    off.ctl.OnPausedChanged(true)
+    Assert.Eq(off.tips.Last(), "ListPaster OFF", "turning off is confirmed")
+    off.ctl.OnClipboardText("x")
+    Assert.Eq(off.items.GetCount(), 0, "OFF ignores copies")
+
+    on := NewQueueEnv()
+    on.items.Load(["a", "b", "c"])
+    on.items.Advance(), on.items.Advance()
+    on.ctl.OnPausedChanged(true)
+    on.ctl.OnPausedChanged(false)
+    Assert.Eq(Join(on.items.ToArray()) " @" on.items.GetPosition(), "c @0", "turning ON clears pasted items")
+    Assert.Eq(on.tips.Last(), "ListPaster ON: collecting copies", "turning on is confirmed")
+
+    listEnv := NewControllerEnv()
+    listEnv.items.Load(["a", "b", "c"])
+    listEnv.items.Advance(), listEnv.items.Advance()
+    listEnv.ctl.OnPausedChanged(true)
+    listEnv.ctl.OnPausedChanged(false)
+    Assert.Eq(Join(listEnv.items.ToArray()) " @" listEnv.items.GetPosition(), "a|b|c @2", "List mode keeps the list when turned back on")
+
+    undoEnv := NewQueueEnv()
+    undoEnv.ctl.OnClipboardText("p")
+    undoEnv.time.now += 1500
+    undoEnv.ctl.PasteNext()
+    Assert.Eq(undoEnv.tips.Last(), "1 / 1:  p   (all pasted)", "Queue mode paste tooltip")
+    undoEnv.ctl.OnClipboardText("z")
+    undoEnv.ctl.Undo()
+    Assert.Eq(Join(undoEnv.delivery.erased) " @" undoEnv.items.GetPosition(), "p @0", "an append between paste and undo keeps undo working")
+}
+
 ; =====================================================================================
 ; Builders
 ; =====================================================================================
@@ -672,8 +747,8 @@ NewPrefs() {
     return prefs
 }
 
-; copyMode "List" keeps upstream's copy rules for the original tests.
-NewControllerEnv(copyMode := "List") {
+; copyMode "List" keeps upstream's copy rules for the original tests; clock "" = the controller's real clock.
+NewControllerEnv(copyMode := "List", clock := "") {
     env := {}
     env.items := ItemList()
     env.clip := FakeClip()
@@ -681,8 +756,16 @@ NewControllerEnv(copyMode := "List") {
     env.tips := FakeTips()
     env.prefs := NewPrefs()
     env.prefs.Set("CopyMode", copyMode)
-    env.ctl := PasteController(env.items, env.delivery, env.clip, env.tips, env.prefs)
+    env.ctl := PasteController(env.items, env.delivery, env.clip, env.tips, env.prefs, clock)
     env.items.OnChange(ObjBindMethod(env.ctl, "OnListChanged"))
+    return env
+}
+
+; Queue mode with a test clock: advance it with env.time.now += ms.
+NewQueueEnv() {
+    time := {now: 0}
+    env := NewControllerEnv("Queue", () => time.now)
+    env.time := time
     return env
 }
 
