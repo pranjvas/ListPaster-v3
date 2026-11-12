@@ -102,7 +102,7 @@ class ListWindow {
             this._dirty := true
             return
         }
-        if (kind = Constants.KIND_LOAD || kind = Constants.KIND_EDIT || kind = Constants.KIND_RESUME)
+        if (kind = Constants.KIND_LOAD || kind = Constants.KIND_EDIT || kind = Constants.KIND_RESUME || kind = Constants.KIND_APPEND)
             this._RenderAll()
         else
             this._RefreshStatus()

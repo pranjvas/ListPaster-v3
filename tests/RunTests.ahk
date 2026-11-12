@@ -42,6 +42,7 @@ RunTest("A13 Tray state", Test_A13_TrayState)
 RunTest("A14 Generator", Test_A14_Generator)
 RunTest("A15 Clipboard ownership and history markers", Test_A15_ClipboardOwnership)
 RunTest("A16 Shortcut keys released before sending", Test_A16_HeldKeys)
+RunTest("A17 Queue list operations", Test_A17_ItemListQueue)
 
 Finish()
 
@@ -623,6 +624,42 @@ Test_A16_HeldKeys() {
     Assert.Eq(Join(snd.KeysToRelease("$^<!z")), "Ctrl|Alt|Shift|LWin|RWin|z", "left-Alt prefixes are stripped")
     Assert.Eq(Join(snd.KeysToRelease("")), "Ctrl|Alt|Shift|LWin|RWin", "with no shortcut only the modifiers are waited on")
     Assert.Eq(snd.WaitForKeysUp("$^+NotAKey", 1), 0, "an unknown key name fails safely instead of typing")
+}
+
+Test_A17_ItemListQueue() {
+    lst := ItemList()
+    kinds := []
+    lst.OnChange((kind) => kinds.Push(kind))
+    Assert.Eq(lst.Append("a"), 1, "append accepts text")
+    Assert.Eq(Join(kinds), "append", "an append is announced as KIND_APPEND")
+    lst.Append("b`nc")
+    Assert.Eq(Join(lst.ToArray()) " @" lst.GetPosition(), "a|b`nc @0", "append keeps the position; multi-line stays one item")
+    Assert.Eq(lst.Append("   ") "/" lst.GetCount(), "0/2", "blank append rejected")
+    lst.Advance(), lst.Advance()
+    lst.Append("d")
+    Assert.Eq(lst.Peek(), "d", "appending after the end makes the new item next")
+    Assert.Eq(lst.ClearDone(), 2, "clear-done removes the delivered items")
+    Assert.Eq(Join(lst.ToArray()) " @" lst.GetPosition(), "d @0", "only undelivered items remain, from the top")
+    before := kinds.Length
+    Assert.Eq(lst.ClearDone(), 0, "nothing delivered: nothing removed")
+    Assert.Eq(kinds.Length, before, "and nothing is announced")
+
+    ; Review focus 4: appended items are saved when Remember list is on
+    paths := StorePaths()
+    prefs := NewPrefs()
+    prefs.Set("RememberList", 1)
+    lst2 := ItemList()
+    timer := FakeTimer()
+    store := ListStore(lst2, timer, FakeTips(), prefs, paths.list, paths.session)
+    lst2.OnChange(ObjBindMethod(store, "OnListChanged"))
+    store.Resume()
+    lst2.Load(["a"])
+    timer.Run("listSave")
+    lst2.Append("x")
+    timer.Run("listSave")
+    lst3 := ItemList()
+    ListStore(lst3, FakeTimer(), FakeTips(), prefs, paths.list, paths.session).Resume()
+    Assert.Eq(Join(lst3.ToArray()), "a|x", "append marks the list dirty")
 }
 
 ; =====================================================================================

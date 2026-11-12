@@ -105,6 +105,26 @@ class ItemList {
         return true
     }
 
+    ; Copy queue: adds one item at the end. The position never moves, so after the end it becomes the next item.
+    Append(text) {
+        if (Trim(text, " `t`r`n") = "")
+            return false
+        this._items.Push(text)
+        this._Notify(Constants.KIND_APPEND)
+        return true
+    }
+
+    ; Copy queue: drops the delivered items so the list starts at the next one. Returns how many were removed.
+    ClearDone() {
+        removed := this._index
+        if (removed <= 0)
+            return 0
+        this._items.RemoveAt(1, removed)
+        this._index := 0
+        this._Notify(Constants.KIND_EDIT)
+        return removed
+    }
+
     InsertAt(n, text) {                   ; new item occupies position n (Count + 1 = append)
         if (n < 1 || n > this._items.Length + 1 || Trim(text) = "")
             return false

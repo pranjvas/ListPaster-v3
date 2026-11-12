@@ -64,7 +64,7 @@ class ListStore {
     OnListChanged(kind) {
         if (kind = Constants.KIND_RESUME)
             return                                      ; state just came from disk
-        if (kind = Constants.KIND_LOAD || kind = Constants.KIND_EDIT)
+        if (kind = Constants.KIND_LOAD || kind = Constants.KIND_EDIT || kind = Constants.KIND_APPEND)
             this._listDirty := true
         if this._Remember()
             this._timer.After("listSave", Constants.SAVE_DEBOUNCE_MS, this._saveFn)
