@@ -132,8 +132,10 @@ New rules:
 - Paused (OFF) ignores copies. Resuming in Queue mode clears done items.
 - `ItemList.Append`/`ClearDone` edge cases (blank text, nothing done, everything done).
 - Settings: new defaults and validation fallbacks.
-- `HotkeyManager`: an `always` hotkey still fires while suspended (an F-key hotkey triggered with
-  `SendLevel 1`).
+- `HotkeyManager`: the `always` group is registered with the `On S` options, checked through a pure
+  `OptionsFor(group, extrasOn)`. AutoHotkey ignores keys a script sends to itself, so the
+  "still fires while suspended" behaviour is tested by the two-process live check instead. A spike on
+  2026-11-12 confirmed that `Hotkey(..., "On S")` fires while suspended and a plain hotkey does not.
 - Tray: ON/OFF wording, the Copy mode submenu, and the new menu entry count.
 - All 226 upstream checks keep passing, or are updated only where this spec changes the behaviour.
 
