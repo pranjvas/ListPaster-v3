@@ -17,7 +17,7 @@ It's a free, open-source (MIT) AutoHotkey v2 script for Windows.
 | Copying | Only a copied list of 2+ lines loads, replacing the list | **Every copy** is queued as one item, from any source; multi-line copies stay whole |
 | Paste next | Ctrl+Shift+V | **Win+V** (while ON) |
 | On/off | Tray: Pause / Resume | **Win+Alt+V**, which works while OFF, or tray: Turn off / Turn on |
-| At start | Always active | ON. Set `StartOn=0` in `data\settings.ini` to start OFF |
+| At start | Always active | ON. To start OFF, add `StartOn=0` under `[Settings]` in `data\settings.ini` (create the file if it isn't there) |
 | Insert mode default | Type | Paste (clipboard + Ctrl+V; your clipboard is put back afterwards) |
 
 - **Duplicate guard.** The same text arriving twice within 1 second is queued once, because some sites write the
@@ -88,14 +88,16 @@ ListPaster's own windows, the taskbar, or the desktop; it tells you to click int
 - **Loading (Copy mode ▸ Load copied lists).** Copying text with two or more lines loads it as the list and replaces the current one, even
   mid-list. Copying a single line never replaces the list, and copying the same list again keeps your place
   (unless it's complete, then it starts again from the top).
-- **One line = one item.** Lines that are empty or only spaces are skipped, and everything else is kept
-  exactly. A row copied from several spreadsheet columns stays one item with tabs in it: Type mode presses
+- **One line = one item** when a list is loaded (Load copied lists, or tray *Load from clipboard*). Lines that
+  are empty or only spaces are skipped, and everything else is kept exactly. In Queue mode a copy is one item,
+  line breaks and all. A row copied from several spreadsheet columns stays one item with tabs in it: Type mode presses
   Tab between the parts, and Paste mode pastes the tabs (which fills the cells next to it in Excel).
 - **Each Win+V advances by one**, only once the item was handed to Windows without error. Quick
   repeated presses each insert one item, in order. The item is typed the moment you let go of the keys, so
   Ctrl and Shift can't be left stuck down. Hold them longer than 3 seconds and nothing is typed (Undo works
   the same way).
-- **At the end** you'll see *List complete (10 of 10)*. It never wraps around; use *Restart at top* to go again.
+- **At the end** you'll see *All 10 pasted. Copy more to queue them.* in Queue mode, or *List complete (10 of 10)*
+  for a loaded list. It never wraps around; use *Restart at top* to go again.
 - **The list window** shows every item and whether it's done. Click a row to make it the next item.
   Right-click a row to edit, insert, add or delete items.
 
@@ -109,7 +111,7 @@ LibreOffice Calc. It can't read what's in other apps' fields, so:
 
 - **Different window:** it refuses, and nothing changes.
 - **Enter auto-advance outside a spreadsheet:** it sends no keys (Enter may have submitted something). It steps
-  back and asks you to erase manually. It does the same for items that contain tabs.
+  back and asks you to erase manually. It does the same for items that contain tabs or line breaks.
 - **Moved to another field:** in classic Windows apps it notices and won't erase. Browsers, Office and similar
   apps report one field for the whole window, so there it erases wherever the cursor is now.
 - **Edited the text, typed after it, or moved the cursor:** Undo can erase the wrong characters, so use the
@@ -118,8 +120,10 @@ LibreOffice Calc. It can't read what's in other apps' fields, so:
 
 ## Type or Paste
 
-- **Type** (default) types each item as keystrokes and never touches your clipboard.
-- **Paste** puts the item on the clipboard and presses Ctrl+V. It works better for long items and in Excel.
+- **Type** types each item as keystrokes and never touches your clipboard. A line break in an item is typed as
+  Enter, which can submit a form.
+- **Paste** (default in this fork) puts the item on the clipboard and presses Ctrl+V. It works better for long
+  and multi-line items and in Excel.
   - Your clipboard is saved before the first paste and put back 1.5 seconds after the last one, or right
     away when you exit.
   - If you copy something yourself in the meantime, your copy is kept.
