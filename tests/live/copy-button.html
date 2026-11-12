@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copy button test</title>
+<style>
+  :root { --bg: #ffffff; --fg: #1d1d1f; --accent: #2563eb; --muted: #6b7280; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111114; --fg: #f2f2f5; --accent: #60a5fa; --muted: #9ca3af; } }
+  body { margin: 0; padding: 32px 16px; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; }
+  button { font: inherit; padding: 10px 18px; margin: 0 8px 8px 0; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
+  #status { color: var(--muted); min-height: 1.5em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Copy button test</h1>
+  <p>Each button writes its value to the clipboard the way a website's copy button does
+     (<code>navigator.clipboard.writeText</code>). With ListPaster ON, each click queues one item.</p>
+  <button id="one" data-value="web-one">Copy web-one</button>
+  <button id="two" data-value="web-two">Copy web-two</button>
+  <p id="status" role="status"></p>
+</main>
+<script>
+  const status = document.getElementById('status');
+  for (const button of document.querySelectorAll('button[data-value]')) {
+    button.addEventListener('click', async () => {
+      const value = button.dataset.value;
+      try {
+        await navigator.clipboard.writeText(value);
+        status.textContent = 'Copied ' + value;
+      } catch (err) {
+        const area = document.createElement('textarea');   // older fallback, also a programmatic write
+        area.value = value;
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand('copy');
+        area.remove();
+        status.textContent = (ok ? 'Copied (fallback) ' : 'Copy failed: ') + value;
+      }
+    });
+  }
+</script>
+</body>
+</html>
