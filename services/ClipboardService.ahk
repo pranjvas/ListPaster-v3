@@ -34,6 +34,16 @@ class ClipboardService {
         return this._externalChanges
     }
 
+    ; True when the clipboard holds copied files (CF_HDROP = 15), e.g. Ctrl+C in Explorer.
+    HasFiles() {
+        try {
+            return DllCall("user32\IsClipboardFormatAvailable", "UInt", 15, "Int") != 0
+        } catch Error as e {
+            this._LogError(A_ThisFunc, e.Message)
+            return false
+        }
+    }
+
     ReadText() {
         try {
             return A_Clipboard
@@ -110,8 +120,8 @@ class ClipboardService {
         if (this.SequenceNumber() = this._ownSeq)
             return                                        ; still ListPaster's own write
         this._externalChanges += 1
-        if (dataType != 1)
-            return                                        ; not text
+        if (dataType != 1 || this.HasFiles())
+            return                                        ; not text (files copied in Explorer read as their paths)
         text := this.ReadText()
         if (text = "")
             return

@@ -608,6 +608,12 @@ Test_A15_ClipboardOwnership() {
     Assert.Eq(sc.ExternalChangeCount() "/" got.Length, "1/1", "any other change is counted and reported")
     sc._OnChange(1)
     Assert.Eq(sc.ExternalChangeCount(), 2, "outside changes count no matter how soon they follow a paste")
+    ; Final review: files copied in Explorer read as text (their paths) but are not text copies
+    sc.files := true
+    sc.seq := 43
+    sc._OnChange(1)
+    Assert.Eq(sc.ExternalChangeCount() "/" got.Length, "3/2", "copied files are counted as a change but never reported as text")
+    sc.files := false
 
     buf := ClipboardService()._PrivateTextBuffer("ab")
     Assert.Eq(NumGet(buf, 0, "UInt") "/" NumGet(buf, 4, "UInt"), "13/6", "text block: CF_UNICODETEXT, 2 characters + terminator")
@@ -1019,8 +1025,10 @@ class FakeDelivery {
 class SeqClip extends ClipboardService {
     seq := 0
     text := ""
+    files := false
     SequenceNumber() => this.seq
     ReadText() => this.text
+    HasFiles() => this.files
 }
 
 ; =====================================================================================
