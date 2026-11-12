@@ -38,7 +38,7 @@ class ListStore {
         position := 0
         if FileExist(this._listPath) {
             try {
-                lines := this._items.ParseLines(FileRead(this._listPath, "UTF-8"))
+                lines := this.Decode(FileRead(this._listPath, "UTF-8"))
                 raw := IniRead(this._sessionPath, "Session", "Position", "0")
                 position := RegExMatch(raw, "^\d{1,7}$") ? Integer(raw) : 0
             } catch Error as e {
@@ -97,7 +97,7 @@ class ListStore {
             SplitPath(this._listPath, , &dir)
             DirCreate(dir)
             if this._listDirty {
-                this._WriteAtomic(this._listPath, this._Join(this._items.ToArray()))
+                this._WriteAtomic(this._listPath, this.Encode(this._items.ToArray()))
                 this._listDirty := false
             }
             IniWrite(this._items.GetPosition(), this._sessionPath, "Session", "Position")
@@ -125,10 +125,45 @@ class ListStore {
         FileMove(tmp, path, 1)                          ; replace in one step: a crash never leaves half a list
     }
 
-    _Join(lines) {
+    ; File format v2: a marker line, then one item per line with \ -> \\, CR -> \r and LF -> \n, so items copied
+    ; with line breaks (copy queue) come back whole. Files without the marker are upstream's one-line-per-item lists.
+    static FORMAT_MARKER := "#ListPaster list v2"
+
+    Encode(items) {
+        out := ListStore.FORMAT_MARKER
+        for item in items
+            out .= "`r`n" StrReplace(StrReplace(StrReplace(item, "\", "\\"), "`r", "\r"), "`n", "\n")
+        return out
+    }
+
+    Decode(text) {
+        lines := StrSplit(text, "`n", "`r")
+        if (lines.Length = 0 || lines[1] != ListStore.FORMAT_MARKER)
+            return this._items.ParseLines(text)         ; upstream format
+        items := []
+        loop lines.Length - 1 {
+            line := lines[A_Index + 1]
+            if (line = "")
+                continue                                ; Encode never writes an empty line (blank items are refused)
+            items.Push(this._Unescape(line))
+        }
+        return items
+    }
+
+    _Unescape(line) {
         out := ""
-        for i, line in lines
-            out .= (i > 1 ? "`r`n" : "") line
+        i := 1
+        while (i <= StrLen(line)) {
+            ch := SubStr(line, i, 1)
+            if (ch = "\" && i < StrLen(line)) {
+                nextCh := SubStr(line, i + 1, 1)
+                out .= (nextCh == "n") ? "`n" : (nextCh == "r") ? "`r" : nextCh
+                i += 2
+                continue
+            }
+            out .= ch
+            i += 1
+        }
         return out
     }
 

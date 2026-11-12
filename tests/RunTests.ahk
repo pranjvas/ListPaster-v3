@@ -413,7 +413,7 @@ Test_A11_Persistence() {
     lst3.Load(["k1", "k2", "k3"])
     lst3.Advance()
     prefs3.Set("RememberList", 1)
-    Assert.Eq(FileExist(paths.list) ? FileRead(paths.list, "UTF-8") : "(missing)", "k1`r`nk2`r`nk3", "turning Remember on writes the list now")
+    Assert.Eq(FileExist(paths.list) ? FileRead(paths.list, "UTF-8") : "(missing)", "#ListPaster list v2`r`nk1`r`nk2`r`nk3", "turning Remember on writes the list now (format v2: marker line, one item per line)")
     Assert.Eq(IniRead(paths.session, "Session", "Position", "?"), "1", "and the position")
 
     lst4 := ItemList()
@@ -682,6 +682,23 @@ Test_A17_ItemListQueue() {
     lst3 := ItemList()
     ListStore(lst3, FakeTimer(), FakeTips(), prefs, paths.list, paths.session).Resume()
     Assert.Eq(Join(lst3.ToArray()), "a|x", "append marks the list dirty")
+
+    ; Final review: multi-line queued items must come back whole, at the same position
+    paths2 := StorePaths()
+    lstA := ItemList()
+    storeA := ListStore(lstA, FakeTimer(), FakeTips(), prefs, paths2.list, paths2.session)
+    lstA.OnChange(ObjBindMethod(storeA, "OnListChanged"))
+    storeA.Resume()
+    lstA.Load(["x"])
+    lstA.Append("b`r`n`r`nc")
+    lstA.Append("C:\temp\new")
+    lstA.Append("d")
+    lstA.Advance()
+    storeA.Flush()
+    lstB := ItemList()
+    ListStore(lstB, FakeTimer(), FakeTips(), prefs, paths2.list, paths2.session).Resume()
+    Assert.Eq(Join(lstB.ToArray(), "‖") " @" lstB.GetPosition(), "x‖b`r`n`r`nc‖C:\temp\new‖d @1", "multi-line and backslash items survive a restart unchanged, at the same position")
+    Assert.Eq(lstB.Peek(), "b`r`n`r`nc", "the next item after a restart is the same multi-line item")
 }
 
 Test_A18_CopyQueue() {
